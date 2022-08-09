@@ -1,0 +1,4 @@
+[client]
+user=BACKUPUSER
+password=PASSWORD
+host=192.168.0.1

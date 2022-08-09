@@ -44,7 +44,6 @@ function export_dbs() {
 
         mysqldump --defaults-file=$MYSQL_CONFIG --no-tablespaces --single-transaction --routines --quick -B $db | gzip > "$FILE"
     done
-
 }
 
 function cleanup_dbs() {
@@ -53,12 +52,38 @@ function cleanup_dbs() {
     rmdir /dev/shm/db_exports/
 }
 
+######################################
+## Export LXD containers and config ##
+######################################
 function export_containers() {
     logger "export containers"
+    ## Where to store the backups
+    BACKUP_DIR=/tmp/bit-exports/lxd
+
+    ## Ensure the backup folder exists
+    mkdir -pv ${BACKUP_DIR}
+
+    ## Dump LXD server config ##
+    lxd init --dump > "${BACKUP_DIR}/lxd.config.${NOW}"
+
+    ## Dump all instances list ##
+    lxc list > "${BACKUP_DIR}/lxd.instances.list.${NOW}"
+
+    ## Make sure we know LXD version too ##
+    snap list lxd > "${BACKUP_DIR}/lxd-version.${NOW}"
+
+    ## Backup all Instances
+    for container in $(lxc list -c n --format csv)
+    do
+        echo "Making backup of container '${container}' ..."
+        lxc export "${container}" "${BACKUP_DIR}/${container}-backup-${NOW}.tar.xz" --instance-only=true
+    done
 }
 
 function cleanup_containers(){
     logger "cleanup containers"
+    rm /tmp/bit-exports/lxd/*.*
+    rmdir /tmp/bit-exports/lxd/
 }
 
 
@@ -82,10 +107,12 @@ case "$PROFILE_ID" in
     1)
         #BACKUP BEGINS
         echo "CASE 3 backup begin"
+        export_containers
         ;;
     2)
         #BACKUP ENDS
         echo "CASE 3 backup end"
+        cleanup_containers
         ;;
     esac
     ;;
