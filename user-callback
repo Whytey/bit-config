@@ -1,0 +1,119 @@
+#!/bin/bash
+
+########################################################################################
+##
+## A user-callback script for BackInTime - https://github.com/bit-team/backintime
+##
+## Refer to https://www.mankier.com/1/backintime#Description-user-callback
+##
+#######################################################################################
+
+PROFILE_ID=$1
+PROFILE_NAME=$2
+REASON=$3
+
+logger "Running bit-user-callback for profile '$PROFILE_ID' and reason '$REASON'"
+
+## Today's date ##
+NOW=$(date +'%m-%d-%Y')
+
+######################
+## Export MYSQL DBs ##
+######################
+function export_dbs() {
+
+    ## Where to export the DBs to - an in memory location
+    TEMP_DIR=/dev/shm/db_exports
+
+    ## MYSQL config file - provides username password
+    MYSQL_CONFIG=/root/backintime/my.cnf
+
+    ## Don't backup databases with these names 
+    ## Example: starts with mysql (^mysql) or ends with _schema (_schema$)
+    IGNORE_DB="(^mysql|_schema$)"
+
+    ## Ensure the backup folder exists
+    mkdir -pv ${TEMP_DIR}
+
+    ## Get a list of databases to backup
+    DATABASES=$(mysql --defaults-file=$MYSQL_CONFIG -s -N -e "SHOW DATABASES WHERE \`Database\` NOT REGEXP '$IGNORE_DB'")
+
+    for db in $DATABASES; do
+        FILE="${TEMP_DIR}/$db-${NOW}.sql.gz"
+        logger "Making backup of database '${db}' ..."
+
+        mysqldump --defaults-file=$MYSQL_CONFIG --no-tablespaces --single-transaction --routines --quick -B $db | gzip > "$FILE"
+    done
+}
+
+function cleanup_dbs() {
+    logger "cleanup dbs"
+    rm /dev/shm/db_exports/*.sql.gz
+    rmdir /dev/shm/db_exports/
+}
+
+######################################
+## Export LXD containers and config ##
+######################################
+function export_containers() {
+    logger "export containers"
+    ## Where to store the backups
+    BACKUP_DIR=/tmp/bit-exports/lxd
+
+    ## Ensure the backup folder exists
+    mkdir -pv ${BACKUP_DIR}
+
+    ## Dump LXD server config ##
+    lxd init --dump > "${BACKUP_DIR}/lxd.config.${NOW}"
+
+    ## Dump all instances list ##
+    lxc list > "${BACKUP_DIR}/lxd.instances.list.${NOW}"
+
+    ## Make sure we know LXD version too ##
+    snap list lxd > "${BACKUP_DIR}/lxd-version.${NOW}"
+
+    ## Backup all Instances
+    for container in $(lxc list -c n --format csv)
+    do
+        echo "Making backup of container '${container}' ..."
+        lxc export "${container}" "${BACKUP_DIR}/${container}-backup-${NOW}.tar.xz" --instance-only=true
+    done
+}
+
+function cleanup_containers(){
+    logger "cleanup containers"
+    rm /tmp/bit-exports/lxd/*.*
+    rmdir /tmp/bit-exports/lxd/
+}
+
+
+case "$PROFILE_ID" in
+2) 
+    case "$REASON" in
+    1)
+        #BACKUP BEGINS
+        logger "CASE 2 backup begin"
+        export_dbs
+        ;;
+    2)
+        #BACKUP ENDS
+        logger "CASE 2 backup end"
+        cleanup_dbs
+        ;;
+    esac
+    ;;
+3)
+    case "$REASON" in
+    1)
+        #BACKUP BEGINS
+        echo "CASE 3 backup begin"
+        export_containers
+        ;;
+    2)
+        #BACKUP ENDS
+        echo "CASE 3 backup end"
+        cleanup_containers
+        ;;
+    esac
+    ;;
+esac
