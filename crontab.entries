@@ -1,0 +1,6 @@
+#Back In Time entry for profile #1 (/data, /home, etc):
+0 1 * * * /usr/bin/nice -n19 /usr/bin/ionice -c2 -n7 /usr/bin/backintime --config /root/backintime/backintime.config backup-job >/dev/null 2>&1
+#Back In Time entry for profile #2 (Databases):
+0 2 * * * /usr/bin/nice -n19 /usr/bin/ionice -c2 -n7 /usr/bin/backintime --profile-id 2 --config /root/backintime/backintime.config backup-job >/dev/null 2>&1
+#Back In Time entry for profile #3 (LXD Containers/VMs):
+0 3 * * 7 /usr/bin/nice -n19 /usr/bin/ionice -c2 -n7 /usr/bin/backintime --profile-id 3 --config /root/backintime/backintime.config backup-job >/dev/null 2>&1
